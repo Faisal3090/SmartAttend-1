@@ -36,18 +36,22 @@ export function Inp({
   placeholder,
   prefix,
   suffix,
-  disabled
+  disabled,
+  className,
+  ...props
 }: {
   type?: string
-  value: string
-  onChange: (val: string) => void
+  value?: string
+  onChange?: (e: any) => void
   placeholder?: string
   prefix?: ReactNode
   suffix?: ReactNode
   disabled?: boolean
+  className?: string
+  [key: string]: any
 }) {
   return (
-    <div className="relative">
+    <div className={`relative ${className || ''}`}>
       {prefix && (
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
           {prefix}
@@ -55,13 +59,16 @@ export function Inp({
       )}
       <input
         type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
+        value={value ?? ''}
+        onChange={e => {
+          if (onChange) onChange(e)
+        }}
         placeholder={placeholder}
         disabled={disabled}
         className={`flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
           ${prefix ? 'pl-10' : ''} ${suffix ? 'pr-10' : ''}
         `}
+        {...props}
       />
       {suffix && (
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground">
@@ -75,10 +82,10 @@ export function Inp({
 export function StatusBadge({ status }: { status: string }) {
   const isGood = ['active', 'linked', 'present'].includes(status.toLowerCase())
   const isWarn = ['pending', 'leave'].includes(status.toLowerCase())
-  
+
   let bgClass = 'bg-muted text-muted-foreground border-border'
   let dotClass = 'bg-muted-foreground'
-  
+
   if (isGood) {
     bgClass = 'bg-green-50 text-green-700 border-green-200'
     dotClass = 'bg-green-500'
@@ -148,11 +155,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                }`}
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                  }`}
               >
                 <Icon className="size-4" />
                 {item.label}
@@ -163,7 +169,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
         {/* User Card */}
         <div className="p-4 border-t border-border">
-          <button 
+          <button
             onClick={handleLogout}
             className="flex w-full items-center justify-between rounded-md p-2 hover:bg-accent transition-colors text-left"
           >
@@ -192,7 +198,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               {pathname.split('/').pop() || 'Dashboard'}
             </span>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <button className="relative p-2 text-muted-foreground hover:bg-accent rounded-full transition-colors">
               <Bell className="size-4" />
