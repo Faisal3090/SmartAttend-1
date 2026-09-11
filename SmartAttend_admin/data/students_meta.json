@@ -1,0 +1,23 @@
+{
+  "customSections": {
+    "4th Year_7th Sem": [
+      "CSE 4A"
+    ],
+    "4th Year_8th Sem": [
+      "CSE 4A"
+    ],
+    "2nd Year_4th Sem": [
+      "ECE 2A",
+      "EEE 2A",
+      "CV 2A",
+      "ME 2A",
+      "AIML 2A",
+      "DS 2A"
+    ]
+  },
+  "customLabBatches": {
+    "A": [
+      "A1"
+    ]
+  }
+}

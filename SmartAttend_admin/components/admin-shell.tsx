@@ -1,6 +1,6 @@
 'use client'
 
-import React, { ReactNode } from 'react'
+import React, { ReactNode, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -9,14 +9,12 @@ import {
   GraduationCap,
   Calendar,
   Settings,
-  Bell,
   Search,
   LogOut,
   ChevronDown,
   Shield,
   Activity,
-  FileText,
-  Smartphone
+  FileText
 } from 'lucide-react'
 
 // Common UI Components
@@ -80,17 +78,17 @@ export function Inp({
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const isGood = ['active', 'linked', 'present'].includes(status.toLowerCase())
-  const isWarn = ['pending', 'leave'].includes(status.toLowerCase())
+  const isGood = ['active', 'linked', 'present', 'registered'].includes(status.toLowerCase())
+  const isWarn = ['pending', 'leave', 'not registered', 'not linked', 'inactive'].includes(status.toLowerCase())
 
   let bgClass = 'bg-muted text-muted-foreground border-border'
   let dotClass = 'bg-muted-foreground'
 
   if (isGood) {
-    bgClass = 'bg-green-50 text-green-700 border-green-200'
-    dotClass = 'bg-green-500'
+    bgClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+    dotClass = 'bg-emerald-500'
   } else if (isWarn) {
-    bgClass = 'bg-amber-50 text-amber-700 border-amber-200'
+    bgClass = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
     dotClass = 'bg-amber-500'
   }
 
@@ -108,7 +106,6 @@ const SIDEBAR_ITEMS = [
   { label: 'Faculty', icon: Users, href: '/admin/faculty' },
   { label: 'Live Attendance', icon: Activity, href: '/admin/attendance' },
   { label: 'Timetable', icon: Calendar, href: '/admin/timetable' },
-  { label: 'Devices', icon: Smartphone, href: '/admin/devices' },
   { label: 'Reports', icon: FileText, href: '/admin/reports' },
   { label: 'Settings', icon: Settings, href: '/admin/settings' },
 ]
@@ -117,10 +114,63 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
+  const [currentUser, setCurrentUser] = useState<{
+    name: string
+    email: string
+    role: string
+    dept?: string
+  }>({
+    name: 'Department Admin',
+    email: 'admin@cse',
+    role: 'DEPT_ADMIN',
+    dept: 'CSE',
+  })
+
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem('smartattend_admin_user')
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser)
+        if (parsed?.name) setCurrentUser(parsed)
+      }
+      const storedDept = localStorage.getItem('smartattend_admin_dept')
+      if (storedDept) {
+        setCurrentUser(prev => ({ ...prev, dept: storedDept }))
+      }
+    } catch {}
+
+    fetch('/api/auth/session')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.authenticated && data?.user) {
+          setCurrentUser(data.user)
+          try {
+            localStorage.setItem('smartattend_admin_user', JSON.stringify(data.user))
+            if (data.user.dept) {
+              localStorage.setItem('smartattend_admin_dept', data.user.dept)
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const handleLogout = async () => {
+    try {
+      localStorage.removeItem('smartattend_admin_dept')
+      localStorage.removeItem('smartattend_admin_user')
+    } catch {}
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/admin/login')
   }
+
+  const initials = currentUser.name
+    .split(' ')
+    .map(p => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'AD'
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -171,18 +221,20 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="p-4 border-t border-border">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center justify-between rounded-md p-2 hover:bg-accent transition-colors text-left"
+            className="flex w-full items-center justify-between rounded-md p-2 hover:bg-accent transition-colors text-left cursor-pointer"
           >
-            <div className="flex items-center gap-3">
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-xs">
-                AK
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="size-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                {initials}
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground leading-none">Anita K.</p>
-                <p className="text-xs text-muted-foreground mt-1">Super Admin</p>
+              <div className="truncate">
+                <p className="text-sm font-medium text-foreground leading-none truncate">{currentUser.name}</p>
+                <p className="text-xs text-muted-foreground mt-1 truncate">
+                  {currentUser.dept ? `${currentUser.dept} Department` : 'Administrator'}
+                </p>
               </div>
             </div>
-            <LogOut className="size-4 text-muted-foreground" />
+            <LogOut className="size-4 text-muted-foreground shrink-0 ml-2" />
           </button>
         </div>
       </aside>
@@ -199,11 +251,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="relative p-2 text-muted-foreground hover:bg-accent rounded-full transition-colors">
-              <Bell className="size-4" />
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive border-2 border-card" />
-            </button>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+              {currentUser.dept || 'CSE'} Department
+            </span>
           </div>
         </header>
 
