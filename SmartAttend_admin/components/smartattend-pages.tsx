@@ -1720,13 +1720,6 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
           {/* Level 1: Year Selection Cards with Semester Dropdowns */}
           {!selectedSem && (
             <div className="space-y-4">
-              {/* Department Badge */}
-              <div className="mb-4">
-                <span className="inline-block px-3 py-1 rounded-full text-sm font-semibold bg-primary text-primary-foreground shadow-sm">
-                  Department: {adminDept}
-                </span>
-              </div>
-
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Select Year to View Semesters</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start relative">
@@ -1930,9 +1923,7 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
                     <h3 className="text-sm font-semibold text-foreground">
                       Sections & Lab Batches in {selectedSem} ({selectedYear})
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Select section and laboratory batch, or create custom lab batches.
-                    </p>
+
                   </div>
                 </div>
 
