@@ -54,6 +54,7 @@ model Student {
   departmentId   Int
   semester       Int
   section        String
+  Lab            String
   academicYear   String
 
   user           User       @relation(fields: [userId], references: [id])
@@ -83,6 +84,7 @@ model Faculty {
   userId       Int      @unique
   employeeId   String   @unique
   departmentId Int
+  designation  String?
 
   user         User       @relation(fields: [userId], references: [id])
   department   Department @relation(fields: [departmentId], references: [id])

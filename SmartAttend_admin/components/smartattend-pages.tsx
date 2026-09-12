@@ -604,7 +604,7 @@ export function formatSectionLab(section?: string | null, lab?: string | null): 
   return `${secLetter}/${labCode}`
 }
 
-export function StudentsPage() {
+export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDept?: string } = {}) {
   const [query, setQuery] = useState('')
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
   const [selectedSem, setSelectedSem] = useState<string | null>(null)
@@ -982,16 +982,8 @@ export function StudentsPage() {
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  // Dynamic admin department from authenticated session and localStorage
-  const [adminDept, setAdminDept] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('smartattend_admin_dept')
-        if (stored) return stored.toUpperCase()
-      } catch {}
-    }
-    return 'CSE'
-  })
+  // Dynamic admin department from authenticated session
+  const [adminDept, setAdminDept] = useState<string>(initialAdminDept)
 
   useEffect(() => {
     try {
@@ -1728,13 +1720,6 @@ export function StudentsPage() {
           {/* Level 1: Year Selection Cards with Semester Dropdowns */}
           {!selectedSem && (
             <div className="space-y-4">
-              {/* Department Badge */}
-              <div className="mb-4">
-                <span className="inline-block px-3 py-1 rounded-full text-sm font-semibold bg-primary text-primary-foreground shadow-sm">
-                  Department: {adminDept}
-                </span>
-              </div>
-
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Select Year to View Semesters</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start relative">
@@ -1938,9 +1923,7 @@ export function StudentsPage() {
                     <h3 className="text-sm font-semibold text-foreground">
                       Sections & Lab Batches in {selectedSem} ({selectedYear})
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Select section and laboratory batch, or create custom lab batches.
-                    </p>
+
                   </div>
                 </div>
 
@@ -1969,6 +1952,9 @@ export function StudentsPage() {
                       const secCount = students_data.filter(
                         s => s.year === selectedYear && s.semester === selectedSem && getSectionLetter(s.section) === secLetter && isStudentInDept(s.dept, adminDept)
                       ).length
+                      
+                      if (secCount === 0) return null;
+
                       const isSelected = selectedSection === sec || (selectedSection !== 'ALL' && getSectionLetter(selectedSection) === secLetter)
                       const displayName = getSectionDisplayName(sec)
 
@@ -2039,6 +2025,12 @@ export function StudentsPage() {
                         All
                       </button>
                       {availableBatchesForActiveSection.map(batch => {
+                        const batchCount = students_data.filter(
+                          s => s.year === selectedYear && s.semester === selectedSem && ((s.Lab || s.lab || `${getSectionLetter(s.section)}1`).toUpperCase().replace(/^LAB\s*/i, '').trim() === batch) && isStudentInDept(s.dept, adminDept) && (selectedSection === 'ALL' || getSectionLetter(s.section) === getSectionLetter(selectedSection))
+                        ).length
+
+                        if (batchCount === 0) return null;
+
                         const isSelected = selectedLabBatch === batch
                         return (
                           <button

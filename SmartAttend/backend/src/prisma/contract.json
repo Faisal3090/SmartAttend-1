@@ -902,6 +902,13 @@
                   "kind": "scalar"
                 }
               },
+              "designation": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "employeeId": {
                 "nullable": false,
                 "type": {
@@ -985,6 +992,9 @@
                 },
                 "departmentId": {
                   "column": "departmentId"
+                },
+                "designation": {
+                  "column": "designation"
                 },
                 "employeeId": {
                   "column": "employeeId"
@@ -1102,6 +1112,13 @@
           },
           "Student": {
             "fields": {
+              "Lab": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "academicYear": {
                 "nullable": false,
                 "type": {
@@ -1245,6 +1262,9 @@
             },
             "storage": {
               "fields": {
+                "Lab": {
+                  "column": "Lab"
+                },
                 "academicYear": {
                   "column": "academicYear"
                 },
@@ -2364,6 +2384,11 @@
                   "nativeType": "int4",
                   "nullable": false
                 },
+                "designation": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "employeeId": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -2538,6 +2563,11 @@
             },
             "student": {
               "columns": {
+                "Lab": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
                 "academicYear": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -3027,7 +3057,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5354a51ca6802dcef022b269fe5e114eaeb3794507e39206153e7fe35fd06aa4"
+    "storageHash": "afbc83bca0d878e7fb051d1ef3f5d23d84dae3a9b2d3acec31b8c82a2b22911f"
   },
   "execution": {
     "executionHash": "b016bb1982981c5e0232d7ebb78cd7ccd2f0855e0b56c9c9b8ea1dd124a0ecc2",

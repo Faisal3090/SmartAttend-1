@@ -12,7 +12,8 @@
       "DS 2A"
     ],
     "4th Year_7th Sem": [
-      "CSE 4A"
+      "CSE 4A",
+      "CSE 4B"
     ],
     "4th Year_8th Sem": [
       "CSE 4A"
@@ -25,7 +26,8 @@
   "customLabBatches": {
     "A": [
       "A1",
-      "A2"
+      "A2",
+      "A3"
     ],
     "B": [
       "B1",
