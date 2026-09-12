@@ -163,6 +163,23 @@ const students: Student[] = [
   // 4th Year - 8th Sem
   { name: 'Gautam Bose', usn: '01CS405', dept: 'CSE', year: '4th Year', semester: '8th Sem', section: 'CSE 4A', account: 'Active', device: 'Linked' },
   { name: 'Meera Iyer', usn: '01CS406', dept: 'CSE', year: '4th Year', semester: '8th Sem', section: 'CSE 4B', account: 'Active', device: 'Linked' },
+
+  // --- Other Departments Mock Data ---
+  // ECE (EC)
+  { name: 'Neha Sharma', usn: '01EC101', dept: 'ECE', year: '1st Year', semester: '1st Sem', section: 'ECE 1A', account: 'Active', device: 'Linked' },
+  { name: 'Varun Reddy', usn: '01EC301', dept: 'ECE', year: '3rd Year', semester: '5th Sem', section: 'ECE 3A', account: 'Active', device: 'Not Linked' },
+  // Mechanical (ME)
+  { name: 'Kiran Desai', usn: '01ME201', dept: 'ME', year: '2nd Year', semester: '3rd Sem', section: 'ME 2A', account: 'Active', device: 'Linked' },
+  { name: 'Anil Kumar', usn: '01ME401', dept: 'ME', year: '4th Year', semester: '7th Sem', section: 'ME 4A', account: 'Inactive', device: 'Not Linked' },
+  // Data Science (DS)
+  { name: 'Sneha Joshi', usn: '01DS101', dept: 'DS', year: '1st Year', semester: '2nd Sem', section: 'DS 1A', account: 'Active', device: 'Linked' },
+  { name: 'Amit Patel', usn: '01DS301', dept: 'DS', year: '3rd Year', semester: '6th Sem', section: 'DS 3A', account: 'Active', device: 'Linked' },
+  // EEE
+  { name: 'Riya Singh', usn: '01EE201', dept: 'EEE', year: '2nd Year', semester: '4th Sem', section: 'EEE 2A', account: 'Active', device: 'Linked' },
+  { name: 'Gaurav Das', usn: '01EE401', dept: 'EEE', year: '4th Year', semester: '8th Sem', section: 'EEE 4A', account: 'Active', device: 'Not Linked' },
+  // Civil (CV)
+  { name: 'Pooja Verma', usn: '01CV101', dept: 'CV', year: '1st Year', semester: '1st Sem', section: 'CV 1A', account: 'Active', device: 'Linked' },
+  { name: 'Deepak Raj', usn: '01CV301', dept: 'CV', year: '3rd Year', semester: '5th Sem', section: 'CV 3A', account: 'Active', device: 'Linked' },
 ]
 
 const DEFAULT_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year']
@@ -174,13 +191,102 @@ const YEAR_SEMESTERS: Record<string, string[]> = {
   '4th Year': ['7th Sem', '8th Sem'],
 }
 
-export function StudentsPage() {
+// Map semester label to its number (1-8)
+const SEM_LABEL_TO_NUM: Record<string, number> = {
+  '1st Sem': 1, '2nd Sem': 2, '3rd Sem': 3, '4th Sem': 4,
+  '5th Sem': 5, '6th Sem': 6, '7th Sem': 7, '8th Sem': 8,
+}
+const SEM_NUM_TO_LABEL: Record<number, string> = {
+  1: '1st Sem', 2: '2nd Sem', 3: '3rd Sem', 4: '4th Sem',
+  5: '5th Sem', 6: '6th Sem', 7: '7th Sem', 8: '8th Sem',
+}
+const YEAR_NUM_TO_LABEL: Record<number, string> = {
+  1: '1st Year', 2: '2nd Year', 3: '3rd Year', 4: '4th Year',
+}
+
+export function StudentsPage({ adminDept = 'CSE' }: { adminDept?: string }) {
   const [query, setQuery] = useState('')
   const [selectedYear, setSelectedYear] = useState<string | null>(null)
   const [selectedSem, setSelectedSem] = useState<string | null>(null)
   const [selectedSection, setSelectedSection] = useState<string | null>('ALL')
   const [openYearDropdown, setOpenYearDropdown] = useState<string | null>(null)
   const [students_data, setStudentsData] = useState<Student[]>(students)
+
+  // Active semester type — tracked per year, persisted in localStorage
+  const [activeSemTypes, setActiveSemTypes] = React.useState<Record<string, 'odd' | 'even'>>({
+    '1st Year': 'odd', '2nd Year': 'odd', '3rd Year': 'odd', '4th Year': 'odd'
+  })
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartattend_active_sem_types')
+      if (saved) {
+        try {
+          setActiveSemTypes(JSON.parse(saved))
+          return
+        } catch (e) { }
+      }
+      // Default: derive from current month
+      const month = new Date().getMonth() + 1
+      const defaultType = month >= 7 ? 'odd' : 'even'
+      setActiveSemTypes({
+        '1st Year': defaultType, '2nd Year': defaultType, '3rd Year': defaultType, '4th Year': defaultType
+      })
+    }
+  }, [])
+
+  const toggleActiveSemType = (year: string) => {
+    setActiveSemTypes(prev => {
+      const next = { ...prev, [year]: prev[year] === 'odd' ? 'even' : 'odd' }
+      if (typeof window !== 'undefined') localStorage.setItem('smartattend_active_sem_types', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const isSemActive = (year: string, semLabel: string): boolean => {
+    const num = SEM_LABEL_TO_NUM[semLabel]
+    if (!num) return false
+    const type = activeSemTypes[year] || 'odd'
+    return type === 'odd' ? num % 2 === 1 : num % 2 === 0
+  }
+
+  // Bulk Promote modal state
+  const [showBulkPromoteModal, setShowBulkPromoteModal] = React.useState(false)
+
+  // Execute bulk promotion: move all students in selectedYear+selectedSem → next sem
+  const confirmBulkPromote = () => {
+    if (!selectedYear || !selectedSem) return
+    const currentNum = SEM_LABEL_TO_NUM[selectedSem] || 1
+    const nextNum = currentNum + 1
+    if (nextNum > 8) { setShowBulkPromoteModal(false); return }
+    const nextSemLabel = SEM_NUM_TO_LABEL[nextNum]
+    const nextYearNum = Math.ceil(nextNum / 2)
+    const nextYearLabel = YEAR_NUM_TO_LABEL[nextYearNum] || selectedYear
+    
+    setStudentsData(prev => prev.map(s => {
+      if (s.year !== selectedYear || s.semester !== selectedSem) return s
+      const newSection = s.section.replace(/\d/, String(nextYearNum))
+      return { ...s, semester: nextSemLabel, year: nextYearLabel, section: newSection }
+    }))
+    
+    // Update active sem types
+    setActiveSemTypes(prev => {
+      const next = { ...prev }
+      const isNextSemEven = nextNum % 2 === 0
+      next[nextYearLabel] = isNextSemEven ? 'even' : 'odd'
+      if (selectedYear !== nextYearLabel) {
+        // If they moved to a new year, reset the old year to 'odd' for incoming students
+        next[selectedYear] = 'odd'
+      }
+      if (typeof window !== 'undefined') localStorage.setItem('smartattend_active_sem_types', JSON.stringify(next))
+      return next
+    })
+    
+    setShowBulkPromoteModal(false)
+    setSelectedSem(null)
+    setSelectedYear(null)
+    setSelectedSection('ALL')
+  }
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false)
@@ -208,9 +314,8 @@ export function StudentsPage() {
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
-  // Hardcoded admin department for testing
-  const adminDept = 'CSE'
-
+  // adminDept is now passed as a prop, defaults to 'CSE' if not provided
+  // (handled in component signature)
   // Helper to safely extract value from either string or ChangeEvent
   const updateFormField = (field: string, valOrEvent: any) => {
     const value = valOrEvent && typeof valOrEvent === 'object' && 'target' in valOrEvent
@@ -239,7 +344,7 @@ export function StudentsPage() {
   const getSectionsForYearAndSem = (year: string, sem: string) => {
     if (!year) return []
     const fromData = students_data
-      .filter(s => s.year === year && (!sem || s.semester === sem) && s.dept === adminDept)
+      .filter(s => s.year === year && (!sem || s.semester === sem) && (adminDept === 'ALL' || s.dept === adminDept))
       .map(s => s.section)
     const yearNum = year.match(/\d/)?.[0] || '1'
     const defaults = [`${adminDept} ${yearNum}A`, `${adminDept} ${yearNum}B`]
@@ -263,7 +368,7 @@ export function StudentsPage() {
   }, [selectedYear, selectedSem, students_data, adminDept])
 
   const filtered = useMemo(() => {
-    let result = students_data.filter(s => s.dept === adminDept)
+    let result = students_data.filter(s => (adminDept === 'ALL' || s.dept === adminDept))
     if (selectedYear) {
       result = result.filter(s => s.year === selectedYear)
     }
@@ -437,9 +542,11 @@ export function StudentsPage() {
     <AdminShell>
       <AdminContent>
         <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Students</h1>
-            <p className="text-sm text-muted-foreground mt-1">Manage student directory, devices, and accounts.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">Students</h1>
+              <p className="text-sm text-muted-foreground mt-1">Manage student directory, devices, and accounts.</p>
+            </div>
           </div>
 
           {/* Level 1: Year Selection Cards with Semester Dropdowns */}
@@ -457,14 +564,16 @@ export function StudentsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start relative">
                   {years.map(year => {
                     const sems = YEAR_SEMESTERS[year] || []
-                    const totalYearStudents = students_data.filter(s => s.year === year && s.dept === adminDept).length
+                    const totalYearStudents = students_data.filter(s => s.year === year && (adminDept === 'ALL' || s.dept === adminDept)).length
                     const isOpen = openYearDropdown === year
+                    // Find the active semester for this year
+                    const activeSemLabel = sems.find(s => isSemActive(year, s))
+                    const activeSemCount = activeSemLabel
+                      ? students_data.filter(s => s.year === year && s.semester === activeSemLabel && (adminDept === 'ALL' || s.dept === adminDept)).length
+                      : 0
 
                     return (
-                      <div
-                        key={year}
-                        className="relative"
-                      >
+                      <div key={year} className="relative flex flex-col gap-2">
                         {/* Year Header Button */}
                         <button
                           type="button"
@@ -474,60 +583,92 @@ export function StudentsPage() {
                           }`}
                         >
                           <div>
-                            <div className="font-bold text-foreground text-base group-hover:text-primary transition-colors">
-                              {year}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {totalYearStudents} students • {sems.length} Semesters
+                            <div className="font-bold text-foreground text-base">{year}</div>
+                            <div className="text-xs font-medium text-muted-foreground mt-1">
+                              <span className="text-foreground font-bold">{activeSemCount} active</span> · {totalYearStudents} total
                             </div>
                           </div>
-                          <div className={`p-1.5 rounded-md transition-all duration-200 ${isOpen ? 'rotate-180 bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted group-hover:bg-accent'}`}>
+                          <div className={`p-1.5 rounded-md transition-all duration-200 ${isOpen ? 'rotate-180 bg-primary text-primary-foreground' : 'text-muted-foreground bg-muted'}`}>
                             <ChevronDown className="size-4" />
                           </div>
                         </button>
 
+
+
                         {/* Floating Semester Dropdown */}
                         {isOpen && (
                           <>
-                            {/* Click-outside backdrop */}
-                            <div
-                              className="fixed inset-0 z-20"
-                              onClick={() => setOpenYearDropdown(null)}
-                            />
-
-                            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-card rounded-xl border border-border shadow-xl p-2.5 space-y-1.5 animate-in fade-in-50 zoom-in-95">
-                              <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center justify-between">
-                                <span>Select Semester</span>
-                                <span className="text-[10px] text-primary font-bold">({sems.length} sems)</span>
+                            <div className="fixed inset-0 z-20" onClick={() => setOpenYearDropdown(null)} />
+                            <div className="absolute left-0 right-0 top-[calc(100%+44px)] z-30 bg-card rounded-xl border border-border shadow-xl p-2.5 space-y-1.5 animate-in fade-in-50 zoom-in-95">
+                              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                  Select Semester
+                                </span>
+                                <div className="flex items-center bg-muted/50 p-0.5 rounded-md border border-border/50">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); if (activeSemTypes[year] === 'even') toggleActiveSemType(year); }}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                                      (!activeSemTypes[year] || activeSemTypes[year] === 'odd')
+                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    Odd
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); if (!activeSemTypes[year] || activeSemTypes[year] === 'odd') toggleActiveSemType(year); }}
+                                    className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                                      activeSemTypes[year] === 'even'
+                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    Even
+                                  </button>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 {sems.map(sem => {
                                   const semStudents = students_data.filter(
-                                    s => s.year === year && s.semester === sem && s.dept === adminDept
+                                    s => s.year === year && s.semester === sem && (adminDept === 'ALL' || s.dept === adminDept)
                                   ).length
+                                  const active = isSemActive(year, sem)
                                   return (
                                     <button
                                       key={sem}
                                       type="button"
+                                      disabled={!active}
                                       onClick={() => {
+                                        if (!active) return
                                         setSelectedYear(year)
                                         setSelectedSem(sem)
                                         setSelectedSection('ALL')
                                         setOpenYearDropdown(null)
                                       }}
-                                      className="w-full p-2.5 rounded-lg border border-border/60 bg-accent/40 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all text-left flex items-center justify-between group cursor-pointer"
+                                      className={`w-full p-2.5 rounded-lg border transition-all text-left flex items-center justify-between ${
+                                        active
+                                          ? 'border-blue-300 bg-blue-50 hover:bg-blue-100 cursor-pointer'
+                                          : 'border-border bg-muted/50 cursor-not-allowed opacity-60 grayscale'
+                                      }`}
                                     >
                                       <div>
-                                        <div className="font-bold text-sm text-foreground group-hover:text-primary-foreground">
+                                        <div className="font-bold text-sm text-foreground flex items-center gap-2">
                                           {sem}
+                                          {active
+                                            ? <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full">Active</span>
+                                            : <span className="text-[10px] bg-muted-foreground text-white px-1.5 py-0.5 rounded-full">Inactive</span>
+                                          }
                                         </div>
-                                        <div className="text-[11px] text-muted-foreground group-hover:text-primary-foreground/80 mt-0.5">
-                                          {semStudents} students
-                                        </div>
+                                        {active
+                                          ? <div className="text-[11px] text-muted-foreground mt-0.5">{semStudents} students</div>
+                                          : <div className="text-[11px] text-muted-foreground mt-0.5">Currently {(activeSemTypes[year] || 'odd') === 'odd' ? 'Odd' : 'Even'} Semester is ongoing</div>
+                                        }
                                       </div>
-                                      <span className="text-xs font-bold text-primary group-hover:text-primary-foreground transition-transform group-hover:translate-x-0.5">
-                                        →
-                                      </span>
+                                      {active && (
+                                        <span className="text-xs font-bold text-blue-600">→</span>
+                                      )}
                                     </button>
                                   )
                                 })}
@@ -616,12 +757,12 @@ export function StudentsPage() {
                         : 'bg-background hover:bg-accent text-foreground border-input'
                     }`}
                   >
-                    All Sections ({students_data.filter(s => s.year === selectedYear && s.semester === selectedSem && s.dept === adminDept).length})
+                    All Sections ({students_data.filter(s => s.year === selectedYear && s.semester === selectedSem && (adminDept === 'ALL' || s.dept === adminDept)).length})
                   </button>
 
                   {sectionsForCurrentSem.map(sec => {
                     const secCount = students_data.filter(
-                      s => s.year === selectedYear && s.semester === selectedSem && s.section === sec && s.dept === adminDept
+                      s => s.year === selectedYear && s.semester === selectedSem && s.section === sec && (adminDept === 'ALL' || s.dept === adminDept)
                     ).length
                     const isSelected = selectedSection === sec
 
@@ -669,6 +810,16 @@ export function StudentsPage() {
                       <Download className="mr-2 h-4 w-4" />
                       Export
                     </button>
+                    {/* Bulk Promote — only for active semester, and not for 8th sem */}
+                    {isSemActive(selectedYear || '', selectedSem || '') && selectedSem !== '8th Sem' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowBulkPromoteModal(true)}
+                        className="inline-flex items-center justify-center h-9 px-4 rounded-md text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-sm"
+                      >
+                        🎓 Bulk Promote
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         const defaultYear = selectedYear || '1st Year'
@@ -1244,6 +1395,59 @@ export function StudentsPage() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Promote Modal */}
+          {showBulkPromoteModal && selectedSem && selectedYear && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <div className="bg-card border border-border shadow-lg rounded-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95">
+                <div className="p-6 border-b border-border bg-muted/30">
+                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    🎓 Bulk Promote Students
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Promote all students in {selectedYear}, {selectedSem} to the next semester.
+                  </p>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium text-blue-900">Students to promote:</span>
+                      <span className="text-lg font-bold text-blue-700">
+                        {students_data.filter(s => s.year === selectedYear && s.semester === selectedSem && (adminDept === 'ALL' || s.dept === adminDept)).length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-blue-800">
+                      <span className="font-semibold">{selectedSem}</span>
+                      <ArrowRight className="h-4 w-4 text-blue-400" />
+                      <span className="font-semibold">
+                        {SEM_NUM_TO_LABEL[(SEM_LABEL_TO_NUM[selectedSem] || 1) + 1] || 'Graduated'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                    <strong>⚠ Warning:</strong> After promotion, the active semester will automatically flip from <strong>{(activeSemTypes[selectedYear || ''] || 'odd').toUpperCase()}</strong> to <strong>{(activeSemTypes[selectedYear || ''] || 'odd') === 'odd' ? 'EVEN' : 'ODD'}</strong>.
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-border bg-muted/30 flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowBulkPromoteModal(false)}
+                    className="px-4 py-2 rounded-md text-sm font-medium border border-input bg-background hover:bg-accent text-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmBulkPromote}
+                    className="px-4 py-2 rounded-md text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm flex items-center gap-2"
+                  >
+                    Confirm Promotion
+                  </button>
+                </div>
               </div>
             </div>
           )}

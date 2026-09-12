@@ -23,21 +23,16 @@ export async function POST(req: Request) {
 
     // Supported administrative accounts
     const validUsers: Record<string, { name: string; role: string; password: string }> = {
-      'admin@smartattend.edu': {
-        name: 'System Administrator',
-        role: 'SUPER_ADMIN',
-        password: 'admin123',
-      },
-      'admin@smartattend.edu.in': {
-        name: 'Anita Kulkarni',
-        role: 'SUPER_ADMIN',
-        password: 'admin123',
-      },
-      'admin': {
-        name: 'Admin User',
-        role: 'SUPER_ADMIN',
-        password: 'admin123',
-      }
+      'admin@smartattend.edu': { name: 'System Administrator', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@smartattend.edu.in': { name: 'Anita Kulkarni', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin': { name: 'Admin User', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@cse': { name: 'CSE Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@ec': { name: 'ECE Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@eee': { name: 'EEE Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@cv': { name: 'Civil Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@me': { name: 'Mechanical Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@aiml': { name: 'AIML Admin', role: 'SUPER_ADMIN', password: 'admin123' },
+      'admin@ds': { name: 'Data Science Admin', role: 'SUPER_ADMIN', password: 'admin123' },
     }
 
     const normalizedEmail = String(email).trim().toLowerCase()
