@@ -2035,7 +2035,7 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
                       </button>
                       {availableBatchesForActiveSection.map(batch => {
                         const batchCount = students_data.filter(
-                          s => s.year === selectedYear && s.semester === selectedSem && s.labBatch === batch && isStudentInDept(s.dept, adminDept) && (selectedSection === 'ALL' || getSectionLetter(s.section) === getSectionLetter(selectedSection))
+                          s => s.year === selectedYear && s.semester === selectedSem && ((s.Lab || s.lab || `${getSectionLetter(s.section)}1`).toUpperCase().replace(/^LAB\s*/i, '').trim() === batch) && isStudentInDept(s.dept, adminDept) && (selectedSection === 'ALL' || getSectionLetter(s.section) === getSectionLetter(selectedSection))
                         ).length
 
                         if (batchCount === 0) return null;
