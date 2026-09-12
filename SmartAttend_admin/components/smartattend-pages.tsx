@@ -686,23 +686,70 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
     fetch('/api/admin/students')
       .then(res => res.json())
       .then(res => {
+        let loadedStudents: any[] = []
+        let loadedSections: Record<string, string[]> = {}
+        let loadedBatches: Record<string, string[]> = {}
+
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          loadedStudents = res.data
           setStudentsData(res.data)
           try {
             localStorage.setItem('smartattend_students_data', JSON.stringify(res.data))
           } catch {}
         }
         if (res.meta?.customSections && Object.keys(res.meta.customSections).length > 0) {
-          setCustomSections(res.meta.customSections)
-          try {
-            localStorage.setItem('smartattend_custom_sections', JSON.stringify(res.meta.customSections))
-          } catch {}
+          loadedSections = res.meta.customSections
         }
         if (res.meta?.customLabBatches && Object.keys(res.meta.customLabBatches).length > 0) {
-          setCustomLabBatches(res.meta.customLabBatches)
-          try {
-            localStorage.setItem('smartattend_custom_lab_batches', JSON.stringify(res.meta.customLabBatches))
-          } catch {}
+          loadedBatches = res.meta.customLabBatches
+        }
+
+        // Prune stale empty sections/batches immediately after loading from server
+        const studentsForPrune = loadedStudents.length > 0 ? loadedStudents : []
+        const prunedSecs: Record<string, string[]> = {}
+        Object.entries(loadedSections).forEach(([key, secs]) => {
+          const [yr, sm] = key.split('_')
+          const active = (secs as string[]).filter((sec: string) => {
+            const letter = sec.replace(/.*?([A-Z])\s*$/, '$1').toUpperCase()
+            return studentsForPrune.some((s: any) => {
+              const sLetter = (s.section || '').replace(/.*?([A-Z])\s*$/, '$1').toUpperCase()
+              return s.year === yr && s.semester === sm && sLetter === letter
+            })
+          })
+          if (active.length > 0) prunedSecs[key] = active
+        })
+        const prunedBatches: Record<string, string[]> = {}
+        Object.entries(loadedBatches).forEach(([secLetter, batches]) => {
+          const active = (batches as string[]).filter((batch: string) => {
+            const batchNorm = batch.toUpperCase().replace(/^LAB\s*/i, '').trim()
+            return studentsForPrune.some((s: any) => {
+              const sLetter = (s.section || '').replace(/.*?([A-Z])\s*$/, '$1').toUpperCase()
+              if (sLetter !== secLetter) return false
+              const sLab = (s.Lab || s.lab || '').toUpperCase().replace(/^LAB\s*/i, '').trim()
+              return sLab === batchNorm
+            })
+          })
+          if (active.length > 0) prunedBatches[secLetter] = active
+        })
+
+        setCustomSections(prunedSecs)
+        setCustomLabBatches(prunedBatches)
+        try {
+          localStorage.setItem('smartattend_custom_sections', JSON.stringify(prunedSecs))
+          localStorage.setItem('smartattend_custom_lab_batches', JSON.stringify(prunedBatches))
+        } catch {}
+
+        // Also persist pruned meta to server
+        if (studentsForPrune.length > 0) {
+          fetch('/api/admin/students', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              students: studentsForPrune,
+              customSections: prunedSecs,
+              customLabBatches: prunedBatches
+            })
+          }).catch(() => {})
         }
       })
       .catch(() => {})
@@ -918,6 +965,41 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
     setShowDeleteModal(true)
   }
 
+  // Helper: prune sections and lab batches that have zero students left after a deletion
+  const pruneEmptySectionsAndBatches = (remainingStudents: any[], currentSections: Record<string, string[]>, currentBatches: Record<string, string[]>) => {
+    const prunedSections: Record<string, string[]> = {}
+    Object.entries(currentSections).forEach(([key, secs]) => {
+      const [yr, sm] = key.split('_')
+      const activeSecs = secs.filter(sec => {
+        const letter = getSectionLetter(sec)
+        return remainingStudents.some(
+          s => s.year === yr && s.semester === sm && getSectionLetter(s.section) === letter && isStudentInDept(s.dept, adminDept)
+        )
+      })
+      if (activeSecs.length > 0) {
+        prunedSections[key] = activeSecs
+      }
+    })
+
+    const prunedBatches: Record<string, string[]> = {}
+    Object.entries(currentBatches).forEach(([secLetter, batches]) => {
+      const activeBatches = batches.filter(batch => {
+        const batchNorm = batch.toUpperCase().replace(/^LAB\s*/i, '').trim()
+        return remainingStudents.some(s => {
+          const sLetter = getSectionLetter(s.section)
+          if (sLetter !== secLetter) return false
+          const sLab = (s.Lab || s.lab || '').toUpperCase().replace(/^LAB\s*/i, '').trim()
+          return sLab === batchNorm
+        })
+      })
+      if (activeBatches.length > 0) {
+        prunedBatches[secLetter] = activeBatches
+      }
+    })
+
+    return { prunedSections, prunedBatches }
+  }
+
   const handleConfirmDeleteStudent = () => {
     if (!deletingStudent) return
     setDeleteSubmitting(true)
@@ -955,7 +1037,12 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
         }
       }
 
-      persistStudents(remainingStudents)
+      // Prune any sections and lab batches that now have zero students
+      const { prunedSections, prunedBatches } = pruneEmptySectionsAndBatches(remainingStudents, customSections, customLabBatches)
+      setCustomSections(prunedSections)
+      setCustomLabBatches(prunedBatches)
+
+      persistStudents(remainingStudents, prunedSections, prunedBatches)
       setDeleteSubmitting(false)
       setShowDeleteModal(false)
       setDeletingStudent(null)
@@ -1650,6 +1737,12 @@ export function StudentsPage({ adminDept: initialAdminDept = 'CSE' }: { adminDep
         }
       }
     }
+
+    // Prune any sections and lab batches that now have zero students
+    const { prunedSections, prunedBatches } = pruneEmptySectionsAndBatches(remainingStudents, customSections, customLabBatches)
+    setCustomSections(prunedSections)
+    setCustomLabBatches(prunedBatches)
+    persistStudents(remainingStudents, prunedSections, prunedBatches)
 
     setShowDeleteConfirm(false)
     setStudentToDelete(null)

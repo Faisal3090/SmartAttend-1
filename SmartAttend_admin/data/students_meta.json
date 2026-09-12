@@ -3,17 +3,8 @@
     "2nd Year_3rd Sem": [
       "ECE 2A"
     ],
-    "2nd Year_4th Sem": [
-      "ECE 2A",
-      "EEE 2A",
-      "CV 2A",
-      "ME 2A",
-      "AIML 2A",
-      "DS 2A"
-    ],
     "4th Year_7th Sem": [
-      "CSE 4A",
-      "CSE 4B"
+      "CSE 4A"
     ],
     "4th Year_8th Sem": [
       "CSE 4A"
@@ -26,14 +17,10 @@
   "customLabBatches": {
     "A": [
       "A1",
-      "A2",
-      "A3"
+      "A2"
     ],
     "B": [
-      "B1",
-      "B2",
-      "B3",
-      "B4"
+      "B1"
     ]
   }
 }
