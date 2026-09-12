@@ -1,10 +1,7 @@
 {
   "customSections": {
-    "4th Year_7th Sem": [
-      "CSE 4A"
-    ],
-    "4th Year_8th Sem": [
-      "CSE 4A"
+    "2nd Year_3rd Sem": [
+      "ECE 2A"
     ],
     "2nd Year_4th Sem": [
       "ECE 2A",
@@ -13,11 +10,28 @@
       "ME 2A",
       "AIML 2A",
       "DS 2A"
+    ],
+    "4th Year_7th Sem": [
+      "CSE 4A"
+    ],
+    "4th Year_8th Sem": [
+      "CSE 4A"
+    ],
+    "1st Year_1st Sem": [
+      "CSE 1A",
+      "CSE 1B"
     ]
   },
   "customLabBatches": {
     "A": [
-      "A1"
+      "A1",
+      "A2"
+    ],
+    "B": [
+      "B1",
+      "B2",
+      "B3",
+      "B4"
     ]
   }
 }

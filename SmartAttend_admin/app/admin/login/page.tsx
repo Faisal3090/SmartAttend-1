@@ -53,13 +53,16 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-8">
       {/* Brand Header */}
-      <div className="absolute top-8 left-8 flex items-center gap-2">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div className="absolute top-8 left-8 flex items-center gap-2.5">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
           <Shield className="size-4" />
         </div>
-        <p className="text-lg font-bold text-primary">
-          Smart<span className="text-muted-foreground font-normal">Attend</span>
-        </p>
+        <div className="flex flex-col">
+          <p className="text-base font-bold text-foreground leading-tight">
+            Automark
+          </p>
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Admin Portal</span>
+        </div>
       </div>
 
       {/* Login Card */}

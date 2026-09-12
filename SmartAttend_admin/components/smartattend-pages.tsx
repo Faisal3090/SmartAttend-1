@@ -70,10 +70,10 @@ export function DashboardPage() {
                   <Link
                     key={action.title}
                     href={action.href}
-                    className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-6 shadow-sm transition-all hover:border-foreground/30 hover:shadow-md"
+                    className="group relative flex flex-col justify-between rounded-xl border border-border bg-card p-6 shadow-sm transition-all hover:border-primary/40 hover:shadow-sm"
                   >
                     <div className="space-y-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="space-y-1">
@@ -124,7 +124,7 @@ export interface ImportPreviewItem {
   semester: string
   section: string
   labBatch: string
-  status: 'READY' | 'ALREADY_EXISTS' | 'DUPLICATE_IN_FILE' | 'INVALID'
+  status: 'READY' | 'ALREADY_EXISTS' | 'OTHER_DEPT' | 'DUPLICATE_IN_FILE' | 'INVALID'
   reason?: string
 }
 
@@ -132,12 +132,143 @@ export interface ImportPreviewData {
   totalFound: number
   readyToImport: number
   alreadyExists: number
+  otherDeptCount: number
   duplicatesInFile: number
   invalidRows: number
   department: string
   year: string
   semester: string
   students: ImportPreviewItem[]
+}
+
+// Helper to match student department, handling aliases (e.g. EC/ECE, CV/CIVIL, ME/MECH, AIML/AI, DS/AIDS)
+export function isStudentInDept(studentDept?: string | null, targetDept?: string | null): boolean {
+  if (!studentDept || !targetDept) return false
+  const s = studentDept.trim().toUpperCase()
+  const t = targetDept.trim().toUpperCase()
+  if (s === t) return true
+
+  // CSE / CS
+  if ((s === 'CSE' || s === 'CS') && (t === 'CSE' || t === 'CS')) return true
+  // EC / ECE
+  if ((s === 'EC' || s === 'ECE') && (t === 'EC' || t === 'ECE')) return true
+  // EEE / EE
+  if ((s === 'EEE' || s === 'EE') && (t === 'EEE' || t === 'EE')) return true
+  // CV / CIVIL
+  if ((s === 'CV' || s === 'CIVIL') && (t === 'CV' || t === 'CIVIL')) return true
+  // ME / MECH / MECHANICAL
+  if ((s === 'ME' || s === 'MECH' || s === 'MECHANICAL') && (t === 'ME' || t === 'MECH' || t === 'MECHANICAL')) return true
+  // AIML / AI
+  if ((s === 'AIML' || s === 'AI') && (t === 'AIML' || t === 'AI')) return true
+  // DS / AIDS / DATA SCIENCE
+  if ((s === 'DS' || s === 'AIDS' || s === 'DATA SCIENCE') && (t === 'DS' || t === 'AIDS' || t === 'DATA SCIENCE')) return true
+  // ISE / IS
+  if ((s === 'ISE' || s === 'IS') && (t === 'ISE' || t === 'IS')) return true
+
+  return false
+}
+
+// Helper to extract standard branch code from department name (e.g. CSE -> CS, ECE -> EC)
+export function getDeptCodeFromDept(dept?: string | null): string {
+  if (!dept) return 'CS'
+  const d = dept.trim().toUpperCase()
+  if (d === 'CSE' || d === 'CS') return 'CS'
+  if (d === 'ECE' || d === 'EC') return 'EC'
+  if (d === 'EEE' || d === 'EE') return 'EE'
+  if (d === 'CV' || d === 'CIVIL') return 'CV'
+  if (d === 'ME' || d === 'MECH' || d === 'MECHANICAL') return 'ME'
+  if (d === 'AIML' || d === 'AI') return 'AI'
+  if (d === 'DS' || d === 'AIDS' || d === 'DATA SCIENCE') return 'DS'
+  if (d === 'ISE' || d === 'IS') return 'IS'
+  return d.slice(0, 2)
+}
+
+// Helper to calculate admission year digits (e.g. '23', '24') from academic year
+export function getAdmissionYearFromAcademicYear(acadYear?: string | null): string {
+  if (!acadYear) return '23'
+  const y = acadYear.trim()
+  if (y.includes('1')) return '24'
+  if (y.includes('2')) return '23'
+  if (y.includes('3')) return '22'
+  if (y.includes('4')) return '21'
+  return '23'
+}
+
+// Helper to verify if a section belongs to the target department (e.g. "ECE 2A" for ECE)
+// Generic sections like "Section A", "A", or "2A" without a foreign department prefix belong to targetDept
+export function isSectionInDept(section?: string | null, targetDept?: string | null): boolean {
+  if (!section || !targetDept) return true
+  const sec = section.trim().toUpperCase()
+
+  const knownDepts = [
+    'CSE', 'CS', 'ECE', 'EC', 'EEE', 'EE', 'CV', 'CIVIL',
+    'ME', 'MECH', 'MECHANICAL', 'AIML', 'AI', 'DS', 'AIDS', 'DATA SCIENCE', 'ISE', 'IS'
+  ]
+  for (const kd of knownDepts) {
+    if (
+      sec.startsWith(kd + ' ') ||
+      sec.startsWith(kd + '-') ||
+      sec.startsWith(kd + '_') ||
+      (sec.length > kd.length && sec.startsWith(kd) && /\d/.test(sec[kd.length]))
+    ) {
+      return isStudentInDept(kd, targetDept)
+    }
+  }
+
+  return true
+}
+
+// Helper to normalize any semester input (e.g. "3", "3 Sem", "3rd", "3rd Sem") into canonical "3rd Sem"
+export function normalizeSemesterString(sem?: string | null): string {
+  if (!sem) return '1st Sem'
+  const trimmed = sem.trim()
+  const numMatch = trimmed.match(/\d+/)
+  if (!numMatch) return trimmed
+  const n = parseInt(numMatch[0])
+  const suffixes: Record<number, string> = {
+    1: '1st',
+    2: '2nd',
+    3: '3rd',
+    4: '4th',
+    5: '5th',
+    6: '6th',
+    7: '7th',
+    8: '8th',
+  }
+  const prefix = suffixes[n] || `${n}th`
+  return `${prefix} Sem`
+}
+
+// Helper to verify if a USN belongs to the target department (e.g. 2VD23CS009 for CSE, 01EC203 for ECE)
+export function isUsnInDept(usn?: string | null, targetDept?: string | null): boolean {
+  if (!usn || !targetDept) return false
+  const cleanUsn = usn.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const deptCode = getDeptCodeFromDept(targetDept)
+  const fullDept = targetDept.trim().toUpperCase()
+
+  // Match VTU standard pattern: e.g. 2VD 23 CS 009
+  const vtuMatch = cleanUsn.match(/^[0-9A-Z]{3}\d{2}([A-Z]{2,4})\d+$/)
+  if (vtuMatch) {
+    const branch = vtuMatch[1]
+    if (branch === deptCode || branch === fullDept || isStudentInDept(branch, targetDept)) {
+      return true
+    }
+    return false
+  }
+
+  // Autonomous / college roll pattern: e.g. 01EC203, 23EC009, 2VDEC001
+  const fallbackRegex = new RegExp(`(?:2VD|\\d{1,4})(${deptCode}|${fullDept})\\d+`, 'i')
+  if (fallbackRegex.test(cleanUsn)) return true
+
+  // Direct prefix pattern: e.g. EC001, ECE001
+  if (cleanUsn.startsWith(deptCode) || cleanUsn.startsWith(fullDept)) return true
+
+  const branchInUsn = cleanUsn.match(/[0-9]+([A-Z]{2,4})[0-9]*/)
+  if (branchInUsn && (branchInUsn[1] === deptCode || isStudentInDept(branchInUsn[1], targetDept))) {
+    return true
+  }
+
+  return false
 }
 
 // Client-side Excel (.xlsx, .xls) and CSV parser matching zoattendence
@@ -174,6 +305,7 @@ export async function parseStudentFileClient(
   let labColIndex = -1
   let emailColIndex = -1
   let semColIndex = -1
+  let deptColIndex = -1
   let headerRowIndex = -1
 
   for (let r = 0; r < Math.min(rows.length, 15); r++) {
@@ -198,6 +330,13 @@ export async function parseStudentFileClient(
          (cell.includes('name') && !cell.includes('father') && !cell.includes('college') && !cell.includes('dept')))
       ) {
         nameColIndex = c
+      }
+
+      if (
+        deptColIndex === -1 &&
+        (cell === 'department' || cell === 'dept' || cell === 'branch' || cell === 'course')
+      ) {
+        deptColIndex = c
       }
 
       if (
@@ -235,7 +374,6 @@ export async function parseStudentFileClient(
     }
   }
 
-  const yearNum = targetYear.match(/\d/)?.[0] || '1'
   const extractedList: Array<{
     rawUsn: string
     rawName: string
@@ -243,6 +381,7 @@ export async function parseStudentFileClient(
     rawLab?: string
     rawEmail?: string
     rawSem?: string
+    rawDept?: string
   }> = []
 
   if (usnColIndex !== -1 && nameColIndex !== -1) {
@@ -256,9 +395,10 @@ export async function parseStudentFileClient(
       const rawLab = labColIndex !== -1 ? String(row[labColIndex] || '').trim() : undefined
       const rawEmail = emailColIndex !== -1 ? String(row[emailColIndex] || '').trim() : undefined
       const rawSem = semColIndex !== -1 ? String(row[semColIndex] || '').trim() : undefined
+      const rawDept = deptColIndex !== -1 ? String(row[deptColIndex] || '').trim() : undefined
 
       if (!rawUsn && !rawName) continue
-      extractedList.push({ rawUsn, rawName, rawSection, rawLab, rawEmail, rawSem })
+      extractedList.push({ rawUsn, rawName, rawSection, rawLab, rawEmail, rawSem, rawDept })
     }
   } else {
     // Fallback: row-by-row scanner
@@ -296,6 +436,7 @@ export async function parseStudentFileClient(
 
   let readyCount = 0
   let alreadyExistsCount = 0
+  let otherDeptCount = 0
   let duplicatesInFileCount = 0
   let invalidRowsCount = 0
 
@@ -313,10 +454,24 @@ export async function parseStudentFileClient(
       .trim()
       .toUpperCase()
 
-    let assignedSection = `${dept} ${yearNum}A`
+    const assignedSem = item.rawSem ? normalizeSemesterString(item.rawSem) : targetSem
+    const semToYear: Record<string, string> = {
+      '1st Sem': '1st Year',
+      '2nd Sem': '1st Year',
+      '3rd Sem': '2nd Year',
+      '4th Sem': '2nd Year',
+      '5th Sem': '3rd Year',
+      '6th Sem': '3rd Year',
+      '7th Sem': '4th Year',
+      '8th Sem': '4th Year'
+    }
+    const resolvedYear = semToYear[assignedSem] || targetYear
+    const resolvedYearNum = resolvedYear.match(/\d/)?.[0] || '1'
+
+    let assignedSection = `${dept} ${resolvedYearNum}A`
     if (item.rawSection) {
       const secLetter = getSectionLetter(item.rawSection)
-      assignedSection = `${dept} ${yearNum}${secLetter}`
+      assignedSection = `${dept} ${resolvedYearNum}${secLetter}`
     }
 
     const secLetter = getSectionLetter(assignedSection)
@@ -327,8 +482,6 @@ export async function parseStudentFileClient(
         assignedLab = rawL.startsWith(secLetter) ? rawL : `${secLetter}${rawL.replace(/[^0-9]/g, '') || '1'}`
       }
     }
-
-    const assignedSem = item.rawSem ? (item.rawSem.toLowerCase().includes('sem') ? item.rawSem : `${item.rawSem} Sem`) : targetSem
 
     let status: ImportPreviewItem['status'] = 'READY'
     let reason: string | undefined = undefined
@@ -341,13 +494,18 @@ export async function parseStudentFileClient(
       status = 'INVALID'
       reason = 'Student name is missing or too short'
       invalidRowsCount++
+    } else if ((item.rawDept && !isStudentInDept(item.rawDept, dept)) || !isUsnInDept(cleanedUsn, dept)) {
+      status = 'OTHER_DEPT'
+      const branchLabel = item.rawDept || 'Other Branch'
+      reason = `Other branch (${branchLabel}) - Skipped`
+      otherDeptCount++
     } else if (seenInFile.has(cleanedUsn)) {
       status = 'DUPLICATE_IN_FILE'
       reason = 'Duplicate USN in uploaded file'
       duplicatesInFileCount++
     } else if (existingStudents.some(s => s.usn.toUpperCase() === cleanedUsn)) {
       status = 'ALREADY_EXISTS'
-      reason = 'Student already registered in database'
+      reason = 'Already registered in database (will update year/semester/section)'
       alreadyExistsCount++
       seenInFile.add(cleanedUsn)
     } else {
@@ -361,7 +519,7 @@ export async function parseStudentFileClient(
       name: cleanedName || item.rawName,
       email: item.rawEmail || (cleanedUsn ? `${cleanedUsn.toLowerCase()}@klsvdit.edu.in` : ''),
       department: dept,
-      year: targetYear,
+      year: resolvedYear,
       semester: assignedSem,
       section: assignedSection,
       labBatch: assignedLab,
@@ -374,6 +532,7 @@ export async function parseStudentFileClient(
     totalFound: parsedStudents.length,
     readyToImport: readyCount,
     alreadyExists: alreadyExistsCount,
+    otherDeptCount,
     duplicatesInFile: duplicatesInFileCount,
     invalidRows: invalidRowsCount,
     department: dept,
@@ -412,27 +571,6 @@ export const isOddSemester = (sem?: string | null): boolean => {
 export const isSemesterActive = (sem: string, cycle: 'ODD' | 'EVEN'): boolean => {
   const isOdd = isOddSemester(sem)
   return cycle === 'ODD' ? isOdd : !isOdd
-}
-
-// Helper to match student department, handling aliases (e.g. EC/ECE, CV/CIVIL, ME/MECH, AIML/AI, DS/AIDS)
-export function isStudentInDept(studentDept?: string | null, targetDept?: string | null): boolean {
-  if (!studentDept || !targetDept) return false
-  const s = studentDept.trim().toUpperCase()
-  const t = targetDept.trim().toUpperCase()
-  if (s === t) return true
-
-  // EC / ECE
-  if ((s === 'EC' || s === 'ECE') && (t === 'EC' || t === 'ECE')) return true
-  // CV / CIVIL
-  if ((s === 'CV' || s === 'CIVIL') && (t === 'CV' || t === 'CIVIL')) return true
-  // ME / MECH / MECHANICAL
-  if ((s === 'ME' || s === 'MECH' || s === 'MECHANICAL') && (t === 'ME' || t === 'MECH' || t === 'MECHANICAL')) return true
-  // AIML / AI
-  if ((s === 'AIML' || s === 'AI') && (t === 'AIML' || t === 'AI')) return true
-  // DS / AIDS / DATA SCIENCE
-  if ((s === 'DS' || s === 'AIDS' || s === 'DATA SCIENCE') && (t === 'DS' || t === 'AIDS' || t === 'DATA SCIENCE')) return true
-
-  return false
 }
 
 // Helper to extract clean Section Letter (A, B, C...)
@@ -549,30 +687,22 @@ export function StudentsPage() {
       .then(res => res.json())
       .then(res => {
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          if (!localFound) {
-            setStudentsData(res.data)
-            try {
-              localStorage.setItem('smartattend_students_data', JSON.stringify(res.data))
-            } catch {}
-          }
+          setStudentsData(res.data)
+          try {
+            localStorage.setItem('smartattend_students_data', JSON.stringify(res.data))
+          } catch {}
         }
         if (res.meta?.customSections && Object.keys(res.meta.customSections).length > 0) {
-          setCustomSections(prev => {
-            const merged = { ...res.meta.customSections, ...prev }
-            try {
-              localStorage.setItem('smartattend_custom_sections', JSON.stringify(merged))
-            } catch {}
-            return merged
-          })
+          setCustomSections(res.meta.customSections)
+          try {
+            localStorage.setItem('smartattend_custom_sections', JSON.stringify(res.meta.customSections))
+          } catch {}
         }
         if (res.meta?.customLabBatches && Object.keys(res.meta.customLabBatches).length > 0) {
-          setCustomLabBatches(prev => {
-            const merged = { ...res.meta.customLabBatches, ...prev }
-            try {
-              localStorage.setItem('smartattend_custom_lab_batches', JSON.stringify(merged))
-            } catch {}
-            return merged
-          })
+          setCustomLabBatches(res.meta.customLabBatches)
+          try {
+            localStorage.setItem('smartattend_custom_lab_batches', JSON.stringify(res.meta.customLabBatches))
+          } catch {}
         }
       })
       .catch(() => {})
@@ -587,28 +717,50 @@ export function StudentsPage() {
     persistStudents(students_data, customSections, customLabBatches)
   }, [students_data, isStudentsLoaded])
 
-  // Semester Cycle State ('ODD' | 'EVEN'), persisted across reloads in localStorage
-  const [semCycle, setSemCycle] = useState<'ODD' | 'EVEN'>('ODD')
+  // Per-Year Semester Cycle State ('ODD' | 'EVEN' per year), persisted across reloads in localStorage
+  const [semCycleByYear, setSemCycleByYear] = useState<Record<string, 'ODD' | 'EVEN'>>({
+    '1st Year': 'ODD',
+    '2nd Year': 'ODD',
+    '3rd Year': 'ODD',
+    '4th Year': 'ODD',
+  })
   const [showPromoteModal, setShowPromoteModal] = useState(false)
   const [promotingSubmitting, setPromotingSubmitting] = useState(false)
 
-  // Initialize semCycle from localStorage
+  // Initialize semCycleByYear from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('smartattend_sem_cycle')
-      if (saved === 'ODD' || saved === 'EVEN') {
-        setSemCycle(saved)
+      const saved = localStorage.getItem('smartattend_sem_cycle_by_year')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === 'object') {
+          setSemCycleByYear(prev => ({ ...prev, ...parsed }))
+          return
+        }
+      }
+      // Migration fallback from old single semCycle if present
+      const oldGlobal = localStorage.getItem('smartattend_sem_cycle')
+      if (oldGlobal === 'ODD' || oldGlobal === 'EVEN') {
+        setSemCycleByYear({
+          '1st Year': oldGlobal,
+          '2nd Year': oldGlobal,
+          '3rd Year': oldGlobal,
+          '4th Year': oldGlobal,
+        })
       }
     } catch {
       // localStorage may not be accessible in some environments
     }
   }, [])
 
-  const handleToggleSemCycle = (newCycle: 'ODD' | 'EVEN') => {
-    setSemCycle(newCycle)
-    try {
-      localStorage.setItem('smartattend_sem_cycle', newCycle)
-    } catch {}
+  const handleToggleYearSemCycle = (year: string, newCycle: 'ODD' | 'EVEN') => {
+    setSemCycleByYear(prev => {
+      const updated = { ...prev, [year]: newCycle }
+      try {
+        localStorage.setItem('smartattend_sem_cycle_by_year', JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
   }
 
   // Create Lab Batch Modal state (admin privileges)
@@ -778,7 +930,7 @@ export function StudentsPage() {
       // If the deleted student was the last student in the currently selected section, reset to ALL
       if (selectedSection && selectedSection !== 'ALL') {
         const hasStudentsLeft = remainingStudents.some(
-          s => s.year === selectedYear && s.semester === selectedSem && s.section === selectedSection && isStudentInDept(s.dept, adminDept)
+          s => s.year === selectedYear && s.semester === selectedSem && getSectionLetter(s.section) === getSectionLetter(selectedSection) && isStudentInDept(s.dept, adminDept)
         )
         if (!hasStudentsLeft) {
           setSelectedSection('ALL')
@@ -793,7 +945,7 @@ export function StudentsPage() {
           const hasBatchStudentsLeft = remainingStudents.some(
             s => s.year === selectedYear &&
                  s.semester === selectedSem &&
-                 (selectedSection === 'ALL' || s.section === selectedSection) &&
+                 (selectedSection === 'ALL' || getSectionLetter(s.section) === getSectionLetter(selectedSection)) &&
                  ((s.Lab || s.lab || `${getSectionLetter(s.section)}1`).toUpperCase().replace(/^LAB\s*/i, '').trim() === delBatch) &&
                  isStudentInDept(s.dept, adminDept)
           )
@@ -888,36 +1040,59 @@ export function StudentsPage() {
     return password
   }
 
-  // Helper to get available sections for any year and semester (empty sections removed automatically)
+  // Helper to get available sections for any year and semester (empty sections removed automatically, deduplicated canonically)
   const getSectionsForYearAndSem = (year: string, sem: string) => {
     if (!year) return []
-    // Only include sections that contain at least 1 student
+    const yearNum = year.match(/\d/)?.[0] || '1'
+
+    // 1. Only include sections that contain at least 1 student belonging to adminDept
     const fromData = students_data
       .filter(s => s.year === year && (!sem || s.semester === sem) && isStudentInDept(s.dept, adminDept))
       .map(s => s.section)
       .filter(Boolean)
 
-    const sections = new Set<string>(fromData)
+    const rawCandidates = new Set<string>(fromData)
 
-    // Include custom sections created by admin
+    // 2. Include custom sections created by admin, strictly filtered to current department
     const key = `${year}_${sem}`
     if (customSections[key]) {
-      customSections[key].forEach(sec => sections.add(sec))
+      customSections[key].forEach(sec => {
+        if (isSectionInDept(sec, adminDept)) {
+          rawCandidates.add(sec)
+        }
+      })
     }
 
-    // Keep active selected section visible if user is currently viewing/creating it in this year & sem
+    // 3. Keep active selected section visible if user is currently viewing/creating it in this year & sem
     if (year === selectedYear && sem === selectedSem && selectedSection && selectedSection !== 'ALL') {
-      sections.add(selectedSection)
+      if (isSectionInDept(selectedSection, adminDept)) {
+        rawCandidates.add(selectedSection)
+      }
     }
 
-    // If there are no sections at all yet for this year & sem, provide default Section A (e.g. CSE 1A)
-    // so the admin can add their first student or create new sections without being blocked
-    if (sections.size === 0) {
-      const yearNum = year.match(/\d/)?.[0] || '1'
-      sections.add(`${adminDept} ${yearNum}A`)
+    // 4. Canonical deduplication by section letter (A, B, C, etc.)
+    // Ensures there is NEVER more than ONE Section A, Section B, etc.
+    const byLetter = new Map<string, string>()
+    rawCandidates.forEach(sec => {
+      const letter = getSectionLetter(sec)
+      if (!letter) return
+      const current = byLetter.get(letter)
+      if (!current) {
+        byLetter.set(letter, sec)
+      } else if (sec.toUpperCase().includes(adminDept.toUpperCase()) && !current.toUpperCase().includes(adminDept.toUpperCase())) {
+        byLetter.set(letter, sec)
+      }
+    })
+
+    // If there are no sections at all yet for this year & sem, provide default Section A (e.g. ECE 2A)
+    if (byLetter.size === 0) {
+      byLetter.set('A', `${adminDept} ${yearNum}A`)
     }
 
-    return Array.from(sections).sort()
+    // Return list sorted alphabetically by section letter
+    return Array.from(byLetter.keys())
+      .sort()
+      .map(letter => byLetter.get(letter)!)
   }
 
   // Academic years strictly 1st to 4th Year (no Alumni section)
@@ -938,7 +1113,7 @@ export function StudentsPage() {
     // 1. Get students for the active year, semester, and section
     let list = students_data.filter(s => s.year === selectedYear && s.semester === selectedSem && isStudentInDept(s.dept, adminDept))
     if (selectedSection && selectedSection !== 'ALL') {
-      list = list.filter(s => s.section === selectedSection)
+      list = list.filter(s => getSectionLetter(s.section) === getSectionLetter(selectedSection))
     }
 
     // 2. Extract only batches that currently have at least 1 student
@@ -984,7 +1159,7 @@ export function StudentsPage() {
       result = result.filter(s => s.semester === selectedSem)
     }
     if (selectedSection && selectedSection !== 'ALL') {
-      result = result.filter(s => s.section === selectedSection)
+      result = result.filter(s => getSectionLetter(s.section) === getSectionLetter(selectedSection))
     }
     if (selectedLabBatch && selectedLabBatch !== 'ALL') {
       result = result.filter(s => {
@@ -1094,7 +1269,7 @@ export function StudentsPage() {
     setImportSubmitting(true)
     setImportError('')
     try {
-      const sem = YEAR_SEMESTERS[importYear]?.[0] || '1st Sem'
+      const sem = importSemester || YEAR_SEMESTERS[importYear]?.[0] || '1st Sem'
       const data = await parseStudentFileClient(
         importFile,
         adminDept,
@@ -1113,47 +1288,71 @@ export function StudentsPage() {
 
   // Handle Commit Import into Directory
   const handleCommitImport = () => {
-    if (!importPreview || importPreview.readyToImport === 0) return
+    if (!importPreview) return
+    const eligibleStudents = importPreview.students.filter(s => s.status === 'READY' || s.status === 'ALREADY_EXISTS')
+    if (eligibleStudents.length === 0) return
     setImportSubmitting(true)
 
-    const readyStudents = importPreview.students.filter(s => s.status === 'READY')
-    const newStudentRecords: Student[] = readyStudents.map(st => ({
-      name: st.name,
-      email: st.email || `${st.usn.toLowerCase()}@klsvdit.edu.in`,
-      usn: st.usn,
-      dept: adminDept,
-      year: st.year,
-      semester: st.semester,
-      section: st.section,
-      Lab: st.labBatch,
-      lab: st.labBatch,
-      account: 'Active',
-      device: 'Not Linked',
-      deviceBound: false,
-      boundDeviceName: null
-    }))
+    const updatedStudents = [...students_data]
+    const addedCount = importPreview.readyToImport
+    const updatedCount = importPreview.alreadyExists
+
+    eligibleStudents.forEach(st => {
+      const existingIndex = updatedStudents.findIndex(s => s.usn.toUpperCase() === st.usn.toUpperCase())
+      if (existingIndex >= 0) {
+        // Update existing student with current year, semester, section and active status
+        updatedStudents[existingIndex] = {
+          ...updatedStudents[existingIndex],
+          name: st.name || updatedStudents[existingIndex].name,
+          dept: adminDept,
+          year: st.year,
+          semester: st.semester,
+          section: st.section,
+          Lab: st.labBatch || updatedStudents[existingIndex].Lab,
+          lab: st.labBatch || updatedStudents[existingIndex].lab,
+          account: 'Active'
+        }
+      } else {
+        // Add new student
+        updatedStudents.push({
+          name: st.name,
+          email: st.email || `${st.usn.toLowerCase()}@klsvdit.edu.in`,
+          usn: st.usn,
+          dept: adminDept,
+          year: st.year,
+          semester: st.semester,
+          section: st.section,
+          Lab: st.labBatch,
+          lab: st.labBatch,
+          account: 'Active',
+          device: 'Not Linked',
+          deviceBound: false,
+          boundDeviceName: null
+        })
+      }
+    })
 
     // Provision any new sections and lab batches
     const updatedSections = { ...customSections }
     const updatedBatches = { ...customLabBatches }
 
-    newStudentRecords.forEach(st => {
+    eligibleStudents.forEach(st => {
       const secKey = `${st.year}_${st.semester}`
       const secLetter = getSectionLetter(st.section)
       const existing = updatedSections[secKey] || []
-      if (!existing.includes(st.section)) {
-        updatedSections[secKey] = [...existing, st.section]
+      // Deduplicate by section letter and ensure only department sections exist
+      if (!existing.some(s => getSectionLetter(s) === secLetter)) {
+        updatedSections[secKey] = [...existing.filter(s => isSectionInDept(s, adminDept)), st.section]
       }
       const existingBatches = updatedBatches[secLetter] || []
-      if (st.lab && !existingBatches.includes(st.lab)) {
-        updatedBatches[secLetter] = [...existingBatches, st.lab].sort()
+      if (st.labBatch && !existingBatches.includes(st.labBatch)) {
+        updatedBatches[secLetter] = [...existingBatches, st.labBatch].sort()
       }
     })
 
     setCustomSections(updatedSections)
     setCustomLabBatches(updatedBatches)
 
-    const updatedStudents = [...students_data, ...newStudentRecords]
     setStudentsData(updatedStudents)
     persistStudents(updatedStudents, updatedSections, updatedBatches)
 
@@ -1163,9 +1362,15 @@ export function StudentsPage() {
     setImportPreview(null)
     setImportStep('upload')
 
+    const summaryText = addedCount > 0 && updatedCount > 0
+      ? `Imported ${addedCount} new and updated ${updatedCount} existing students in ${adminDept} (${importPreview.year}).`
+      : addedCount > 0
+      ? `Successfully imported ${addedCount} students into ${adminDept} (${importPreview.year}). Saved to directory.`
+      : `Successfully updated ${updatedCount} existing students to ${importPreview.year} (${importPreview.semester}). Saved to directory.`
+
     setToastMessage({
       type: 'success',
-      text: `Successfully imported ${newStudentRecords.length} students into ${adminDept} (${importPreview.year}). Saved to directory.`
+      text: summaryText
     })
     setTimeout(() => setToastMessage(null), 5000)
   }
@@ -1236,9 +1441,12 @@ export function StudentsPage() {
     if (!targetLab) errors.labBatch = 'Lab batch is missing'
 
     const cleanUsn = formData.usn.trim().toUpperCase().slice(0, 10)
+    const expectedDeptCode = getDeptCodeFromDept(adminDept)
     if (!cleanUsn) errors.usn = 'USN (Register Number) is required'
     else if (cleanUsn.length > 10) errors.usn = 'USN cannot exceed 10 characters'
-    else if (students_data.some(s => s.usn.toUpperCase() === cleanUsn)) {
+    else if (!isUsnInDept(cleanUsn, adminDept)) {
+      errors.usn = `USN must match ${adminDept} department (expected branch code '${expectedDeptCode}', e.g. 2VD__${expectedDeptCode}___)`
+    } else if (students_data.some(s => s.usn.toUpperCase() === cleanUsn)) {
       errors.usn = 'A student with this USN already exists'
     }
 
@@ -1308,9 +1516,12 @@ export function StudentsPage() {
     if (!formData.labBatch.trim()) errors.labBatch = 'Lab batch is missing'
 
     const cleanUsn = formData.usn.trim().toUpperCase().slice(0, 10)
+    const expectedDeptCode = getDeptCodeFromDept(adminDept)
     if (!cleanUsn) errors.usn = 'USN (Register Number) is required'
     else if (cleanUsn.length > 10) errors.usn = 'USN cannot exceed 10 characters'
-    else if (students_data.some(s => s.usn !== studentToEdit.usn && s.usn.toUpperCase() === cleanUsn)) {
+    else if (!isUsnInDept(cleanUsn, adminDept)) {
+      errors.usn = `USN must match ${adminDept} department (expected branch code '${expectedDeptCode}', e.g. 2VD__${expectedDeptCode}___)`
+    } else if (students_data.some(s => s.usn !== studentToEdit.usn && s.usn.toUpperCase() === cleanUsn)) {
       errors.usn = 'Another student with this USN already exists'
     }
 
@@ -1392,12 +1603,15 @@ export function StudentsPage() {
         })
       )
 
-      // Flip semester cycle ODD <-> EVEN
-      const nextCycle: 'ODD' | 'EVEN' = semCycle === 'ODD' ? 'EVEN' : 'ODD'
-      setSemCycle(nextCycle)
-      try {
-        localStorage.setItem('smartattend_sem_cycle', nextCycle)
-      } catch {}
+      // Smart Bulk Promotion: Update active semester specifically for the destination year, leaving other batches untouched
+      const destCycle: 'ODD' | 'EVEN' = isOddSemester(progression.nextSem) ? 'ODD' : 'EVEN'
+      setSemCycleByYear(prev => {
+        const updated = { ...prev, [progression.nextYear]: destCycle }
+        try {
+          localStorage.setItem('smartattend_sem_cycle_by_year', JSON.stringify(updated))
+        } catch {}
+        return updated
+      })
 
       setPromotingSubmitting(false)
       setShowPromoteModal(false)
@@ -1407,7 +1621,7 @@ export function StudentsPage() {
 
       setToastMessage({
         type: 'success',
-        text: `Successfully promoted ${promotedCount} students to ${progression.nextSem} (${progression.nextYear}). Semester cycle switched to ${nextCycle === 'ODD' ? 'Odd' : 'Even'} Semester.`
+        text: `Successfully promoted ${promotedCount} students to ${progression.nextSem} (${progression.nextYear}). Active semester for ${progression.nextYear} set to ${destCycle === 'ODD' ? 'Odd' : 'Even'} Sem.`
       })
       setTimeout(() => setToastMessage(null), 5000)
     }, 400)
@@ -1421,7 +1635,7 @@ export function StudentsPage() {
 
     if (selectedSection && selectedSection !== 'ALL') {
       const hasStudentsLeft = remainingStudents.some(
-        s => s.year === selectedYear && s.semester === selectedSem && s.section === selectedSection && isStudentInDept(s.dept, adminDept)
+        s => s.year === selectedYear && s.semester === selectedSem && getSectionLetter(s.section) === getSectionLetter(selectedSection) && isStudentInDept(s.dept, adminDept)
       )
       if (!hasStudentsLeft) {
         setSelectedSection('ALL')
@@ -1491,32 +1705,6 @@ export function StudentsPage() {
             </div>
             {!selectedSem && (
               <div className="flex flex-wrap items-center gap-3">
-                {/* Odd / Even Semester Cycle Toggle (Front page only) */}
-                <div className="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSemCycle('ODD')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      semCycle === 'ODD'
-                        ? 'bg-primary text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Odd Sem
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSemCycle('EVEN')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      semCycle === 'EVEN'
-                        ? 'bg-primary text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Even Sem
-                  </button>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => {
@@ -1552,9 +1740,10 @@ export function StudentsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start relative">
                   {years.map(year => {
                     const sems = YEAR_SEMESTERS[year] || []
+                    const yearCycle = semCycleByYear[year] || 'ODD'
                     const totalYearStudents = students_data.filter(s => s.year === year && isStudentInDept(s.dept, adminDept)).length
                     const activeYearStudents = students_data.filter(
-                      s => s.year === year && isStudentInDept(s.dept, adminDept) && isSemesterActive(s.semester, semCycle)
+                      s => s.year === year && isStudentInDept(s.dept, adminDept) && isSemesterActive(s.semester, yearCycle)
                     ).length
                     const isOpen = openYearDropdown === year
 
@@ -1593,19 +1782,47 @@ export function StudentsPage() {
                               onClick={() => setOpenYearDropdown(null)}
                             />
 
-                            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-card rounded-xl border border-border shadow-xl p-2.5 space-y-1.5 animate-in fade-in-50 zoom-in-95">
+                            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 bg-card rounded-xl border border-border shadow-xl p-2.5 space-y-2 animate-in fade-in-50 zoom-in-95">
                               <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1 flex items-center justify-between">
                                 <span>Select Semester</span>
-                                <span className="text-[10px] text-primary font-bold">
-                                  Current: {semCycle === 'ODD' ? 'Odd Sem' : 'Even Sem'}
-                                </span>
+                                {/* Sleek integrated Odd / Even pill toggle */}
+                                <div className="flex items-center p-0.5 rounded-md border border-border bg-muted/80 text-[10px] lowercase normal-case tracking-normal">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleYearSemCycle(year, 'ODD')
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                                      yearCycle === 'ODD'
+                                        ? 'bg-primary text-primary-foreground shadow-xs'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    Odd
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleYearSemCycle(year, 'EVEN')
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${
+                                      yearCycle === 'EVEN'
+                                        ? 'bg-primary text-primary-foreground shadow-xs'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                  >
+                                    Even
+                                  </button>
+                                </div>
                               </div>
                               <div className="space-y-1.5">
                                 {sems.map(sem => {
                                   const semStudents = students_data.filter(
                                     s => s.year === year && s.semester === sem && isStudentInDept(s.dept, adminDept)
                                   ).length
-                                  const isActive = isSemesterActive(sem, semCycle)
+                                  const isActive = isSemesterActive(sem, yearCycle)
 
                                   if (isActive) {
                                     return (
@@ -1651,7 +1868,7 @@ export function StudentsPage() {
                                           {sem}
                                         </div>
                                         <div className="text-[10px] text-muted-foreground italic mt-0.5">
-                                          Currently {semCycle === 'ODD' ? 'Odd' : 'Even'} Semester is ongoing
+                                          Currently {yearCycle === 'ODD' ? 'Odd' : 'Even'} Semester is ongoing
                                         </div>
                                         <div className="text-[10px] text-muted-foreground/70 mt-0.5">
                                           {semStudents} students
@@ -1700,7 +1917,7 @@ export function StudentsPage() {
                 </div>
 
                 {/* Right side actions: Bulk Promote Button (for active semester with students, excluded for 8th Sem) */}
-                {selectedSem && selectedSem !== '8th Sem' && isSemesterActive(selectedSem, semCycle) && SEMESTER_PROGRESSION[selectedSem] && students_data.some(s => s.year === selectedYear && s.semester === selectedSem && isStudentInDept(s.dept, adminDept)) && (
+                {selectedSem && selectedSem !== '8th Sem' && isSemesterActive(selectedSem, semCycleByYear[selectedYear || ''] || 'ODD') && SEMESTER_PROGRESSION[selectedSem] && students_data.some(s => s.year === selectedYear && s.semester === selectedSem && isStudentInDept(s.dept, adminDept)) && (
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -1748,10 +1965,11 @@ export function StudentsPage() {
                     </button>
 
                     {sectionsForCurrentSem.map(sec => {
+                      const secLetter = getSectionLetter(sec)
                       const secCount = students_data.filter(
-                        s => s.year === selectedYear && s.semester === selectedSem && s.section === sec && isStudentInDept(s.dept, adminDept)
+                        s => s.year === selectedYear && s.semester === selectedSem && getSectionLetter(s.section) === secLetter && isStudentInDept(s.dept, adminDept)
                       ).length
-                      const isSelected = selectedSection === sec
+                      const isSelected = selectedSection === sec || (selectedSection !== 'ALL' && getSectionLetter(selectedSection) === secLetter)
                       const displayName = getSectionDisplayName(sec)
 
                       return (
@@ -1903,10 +2121,13 @@ export function StudentsPage() {
                         )
                         const batches = Array.from(new Set([...existing, ...(customLabBatches[secLetter] || []), `${secLetter}1`])).sort()
 
+                        const deptCode = getDeptCodeFromDept(adminDept)
+                        const yy = getAdmissionYearFromAcademicYear(defaultYear)
+
                         setFormData({
                           name: '',
                           email: '',
-                          usn: '',
+                          usn: `2VD${yy}${deptCode}`,
                           year: defaultYear,
                           semester: defaultSem,
                           section: defaultSec,
@@ -2096,10 +2317,13 @@ export function StudentsPage() {
                                       )
                                       const batches = Array.from(new Set([...existing, ...(customLabBatches[secLetter] || []), `${secLetter}1`])).sort()
 
+                                      const deptCode = getDeptCodeFromDept(adminDept)
+                                      const yy = getAdmissionYearFromAcademicYear(defaultYear)
+
                                       setFormData({
                                         name: '',
                                         email: '',
-                                        usn: '',
+                                        usn: `2VD${yy}${deptCode}`,
                                         year: defaultYear,
                                         semester: defaultSem,
                                         section: defaultSec,
@@ -2373,13 +2597,13 @@ export function StudentsPage() {
                     <Inp
                       type="text"
                       maxLength={10}
-                      placeholder="e.g. 2VD23CS001"
+                      placeholder={`e.g. 2VD${getAdmissionYearFromAcademicYear(formData.year || selectedYear)}${getDeptCodeFromDept(adminDept)}001`}
                       value={formData.usn}
                       onChange={(val: any) => updateFormField('usn', val)}
                       className="w-full font-mono uppercase"
                     />
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Max 10 characters (VARCHAR(10) format).
+                      Format: <span className="font-mono font-semibold text-foreground">2VD__{getDeptCodeFromDept(adminDept)}___</span> ({adminDept} department format, e.g. <span className="font-mono text-primary font-medium">2VD{getAdmissionYearFromAcademicYear(formData.year || selectedYear)}{getDeptCodeFromDept(adminDept)}009</span>).
                     </p>
                     {formErrors.usn && (
                       <p className="text-xs text-destructive mt-1">{formErrors.usn}</p>
@@ -2595,13 +2819,13 @@ export function StudentsPage() {
                     <Inp
                       type="text"
                       maxLength={10}
-                      placeholder="e.g. 2VD23CS001"
+                      placeholder={`e.g. 2VD${getAdmissionYearFromAcademicYear(formData.year)}${getDeptCodeFromDept(adminDept)}001`}
                       value={formData.usn}
                       onChange={(val: any) => updateFormField('usn', val)}
                       className="w-full font-mono uppercase"
                     />
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Max 10 characters (VARCHAR(10) format).
+                      Format: <span className="font-mono font-semibold text-foreground">2VD__{getDeptCodeFromDept(adminDept)}___</span> ({adminDept} department format, e.g. <span className="font-mono text-primary font-medium">2VD{getAdmissionYearFromAcademicYear(formData.year)}{getDeptCodeFromDept(adminDept)}009</span>).
                     </p>
                     {formErrors.usn && (
                       <p className="text-xs text-destructive mt-1">{formErrors.usn}</p>
@@ -2650,34 +2874,26 @@ export function StudentsPage() {
                     </p>
                   </div>
 
-                  {/* Semester */}
+                  {/* Semester - Auto-filled & Read-only */}
                   <div>
-                    <Label required>Semester</Label>
-                    <select
-                      value={formData.semester}
-                      onChange={(e) => {
-                        const newSem = e.target.value
-                        const availableSecs = getSectionsForYearAndSem(formData.year, newSem)
-                        const defaultSec = availableSecs[0] || formData.section
-                        const secLetter = getSectionLetter(defaultSec)
-                        const batches = customLabBatches[secLetter] || [`${secLetter}1`, `${secLetter}2`]
-                        setFormData(prev => ({
-                          ...prev,
-                          semester: newSem,
-                          section: defaultSec,
-                          labBatch: batches[0] || `${secLetter}1`
-                        }))
-                        if (formErrors.semester) setFormErrors(prev => { const n = { ...prev }; delete n.semester; return n })
-                      }}
-                      className="w-full mt-1 h-9 px-3 rounded-md border border-input bg-background text-foreground text-sm outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-                    >
-                      {(YEAR_SEMESTERS[formData.year] || []).map(sem => (
-                        <option key={sem} value={sem}>{sem}</option>
-                      ))}
-                    </select>
-                    {formErrors.semester && (
-                      <p className="text-xs text-destructive mt-1">{formErrors.semester}</p>
-                    )}
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Semester</Label>
+                      <span className="text-[11px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
+                        Auto-filled
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        value={formData.semester}
+                        className="w-full h-9 px-3 pr-8 rounded-md border border-input bg-muted/60 text-foreground text-sm font-medium cursor-not-allowed select-none outline-none"
+                      />
+                      <Lock className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Enrolled semester ({formData.semester}).
+                    </p>
                   </div>
 
                   {/* Section */}
@@ -2862,7 +3078,7 @@ export function StudentsPage() {
                       <Smartphone className="h-6 w-6 text-muted-foreground mx-auto" />
                       <p className="text-xs font-medium text-foreground">No Mobile Device Registered</p>
                       <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                        This student has not yet bound a mobile device. Device binding occurs securely when the student logs in from the SmartAttend mobile application.
+                        This student has not yet bound a mobile device. Device binding occurs securely when the student logs in from the Automark mobile application.
                       </p>
                     </div>
                   )}
@@ -3186,7 +3402,7 @@ export function StudentsPage() {
                   <div className="flex flex-col flex-1 overflow-hidden p-5 space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div className="p-3 rounded-lg border border-border bg-card">
-                        <div className="text-[11px] text-muted-foreground">Total Found</div>
+                        <div className="text-[11px] text-muted-foreground font-medium">Total in File</div>
                         <div className="text-xl font-bold text-foreground">{importPreview.totalFound}</div>
                       </div>
                       <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
@@ -3194,16 +3410,24 @@ export function StudentsPage() {
                         <div className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{importPreview.readyToImport}</div>
                       </div>
                       <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-                        <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">Already Exists</div>
+                        <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">Already in DB (Will Update)</div>
                         <div className="text-xl font-bold text-amber-700 dark:text-amber-400">{importPreview.alreadyExists}</div>
                       </div>
-                      <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/50 dark:bg-orange-950/20">
-                        <div className="text-[11px] text-orange-700 dark:text-orange-400 font-medium">Duplicates / Invalid</div>
-                        <div className="text-xl font-bold text-orange-700 dark:text-orange-400">
-                          {importPreview.duplicatesInFile + importPreview.invalidRows}
-                        </div>
+                      <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 dark:bg-slate-900/20">
+                        <div className="text-[11px] text-slate-700 dark:text-slate-400 font-medium">Other Branches (Skipped)</div>
+                        <div className="text-xl font-bold text-slate-700 dark:text-slate-400">{importPreview.otherDeptCount}</div>
                       </div>
                     </div>
+
+                    {(importPreview.duplicatesInFile > 0 || importPreview.invalidRows > 0) && (
+                      <div className="p-2.5 rounded-lg border border-orange-200 bg-orange-50/60 dark:bg-orange-950/20 text-xs text-orange-800 dark:text-orange-300 flex items-center justify-between">
+                        <span>
+                          {importPreview.duplicatesInFile > 0 && `${importPreview.duplicatesInFile} duplicate row(s) in file. `}
+                          {importPreview.invalidRows > 0 && `${importPreview.invalidRows} corrupt or invalid row(s).`}
+                        </span>
+                        <span className="font-semibold text-orange-600 dark:text-orange-400">Skipped</span>
+                      </div>
+                    )}
 
                     <div className="text-xs text-muted-foreground flex items-center justify-between px-1">
                       <span>Department: <strong className="text-foreground">{importPreview.department}</strong></span>
@@ -3223,7 +3447,7 @@ export function StudentsPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                           {importPreview.students.map((st, idx) => (
-                            <tr key={idx} className={st.status !== 'READY' ? 'bg-muted/30' : 'hover:bg-muted/20'}>
+                            <tr key={idx} className={st.status === 'OTHER_DEPT' ? 'bg-muted/20 opacity-70' : st.status !== 'READY' && st.status !== 'ALREADY_EXISTS' ? 'bg-muted/30' : 'hover:bg-muted/20'}>
                               <td className="px-3 py-2 font-mono font-medium">{st.usn}</td>
                               <td className="px-3 py-2">{st.name}</td>
                               <td className="px-3 py-2 font-medium">{getSectionDisplayName(st.section)}</td>
@@ -3235,7 +3459,11 @@ export function StudentsPage() {
                                   </span>
                                 ) : st.status === 'ALREADY_EXISTS' ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" title={st.reason || ''}>
-                                    Already in DB
+                                    Will Update
+                                  </span>
+                                ) : st.status === 'OTHER_DEPT' ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700" title={st.reason || ''}>
+                                    Other Branch (Skipped)
                                   </span>
                                 ) : st.status === 'DUPLICATE_IN_FILE' ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800" title={st.reason || ''}>
@@ -3243,7 +3471,7 @@ export function StudentsPage() {
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" title={st.reason || ''}>
-                                    Invalid ({st.reason || 'Data error'})
+                                    {`Invalid (${st.reason || 'Data error'})`}
                                   </span>
                                 )}
                               </td>
@@ -3277,11 +3505,15 @@ export function StudentsPage() {
                         <button
                           type="button"
                           onClick={handleCommitImport}
-                          disabled={importPreview.readyToImport === 0 || importSubmitting}
+                          disabled={importPreview.readyToImport + importPreview.alreadyExists === 0 || importSubmitting}
                           className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
                         >
                           {importSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Import {importPreview.readyToImport} Students
+                          {importPreview.readyToImport > 0 && importPreview.alreadyExists > 0
+                            ? `Import (${importPreview.readyToImport}) & Update (${importPreview.alreadyExists})`
+                            : importPreview.readyToImport > 0
+                            ? `Import ${importPreview.readyToImport} Students`
+                            : `Update ${importPreview.alreadyExists} Existing Students`}
                         </button>
                       </div>
                     </div>
@@ -3347,7 +3579,7 @@ export function StudentsPage() {
                       Promoting students will advance all enrolled records in {selectedSem} to <strong>{SEMESTER_PROGRESSION[selectedSem]?.nextSem}</strong>.
                     </p>
                     <p>
-                      The institutional semester cycle will automatically switch from <strong>{semCycle === 'ODD' ? 'Odd Semester' : 'Even Semester'}</strong> to <strong>{semCycle === 'ODD' ? 'Even Semester' : 'Odd Semester'}</strong>.
+                      The destination academic year (<strong>{SEMESTER_PROGRESSION[selectedSem]?.nextYear}</strong>) will automatically update its active semester to <strong>{isOddSemester(SEMESTER_PROGRESSION[selectedSem]?.nextSem) ? 'Odd Semester' : 'Even Semester'}</strong>, leaving junior batches and other years untouched.
                     </p>
                   </div>
 

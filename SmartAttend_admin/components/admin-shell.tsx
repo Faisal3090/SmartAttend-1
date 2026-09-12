@@ -78,17 +78,22 @@ export function Inp({
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const isGood = ['active', 'linked', 'present', 'registered'].includes(status.toLowerCase())
-  const isWarn = ['pending', 'leave', 'not registered', 'not linked', 'inactive'].includes(status.toLowerCase())
+  const s = status.toLowerCase()
+  const isBlue = ['linked', 'registered'].includes(s)
+  const isGreen = ['active', 'present'].includes(s)
+  const isWarn = ['pending', 'leave', 'not registered', 'not linked', 'inactive'].includes(s)
 
   let bgClass = 'bg-muted text-muted-foreground border-border'
   let dotClass = 'bg-muted-foreground'
 
-  if (isGood) {
-    bgClass = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+  if (isBlue) {
+    bgClass = 'bg-blue-50 text-blue-700 border-blue-200'
+    dotClass = 'bg-blue-600'
+  } else if (isGreen) {
+    bgClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'
     dotClass = 'bg-emerald-500'
   } else if (isWarn) {
-    bgClass = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+    bgClass = 'bg-amber-50 text-amber-700 border-amber-200'
     dotClass = 'bg-amber-500'
   }
 
@@ -104,7 +109,6 @@ const SIDEBAR_ITEMS = [
   { label: 'Overview', icon: LayoutDashboard, href: '/admin/dashboard' },
   { label: 'Students', icon: GraduationCap, href: '/admin/students' },
   { label: 'Faculty', icon: Users, href: '/admin/faculty' },
-  { label: 'Live Attendance', icon: Activity, href: '/admin/attendance' },
   { label: 'Timetable', icon: Calendar, href: '/admin/timetable' },
   { label: 'Reports', icon: FileText, href: '/admin/reports' },
   { label: 'Settings', icon: Settings, href: '/admin/settings' },
@@ -177,11 +181,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="w-64 border-r border-border bg-card hidden md:flex flex-col h-screen sticky top-0">
         {/* Brand */}
-        <div className="h-14 border-b border-border flex items-center px-4 gap-2">
-          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <div className="h-14 border-b border-border flex items-center px-4 gap-2.5">
+          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-xs">
             <Shield className="size-4" />
           </div>
-          <span className="font-semibold text-foreground tracking-tight">SmartAttend</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-foreground tracking-tight text-sm leading-tight">Automark</span>
+            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Admin Portal</span>
+          </div>
         </div>
 
         {/* Search */}
@@ -191,7 +198,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <input
               type="text"
               placeholder="Search anything..."
-              className="w-full h-9 rounded-md border border-input bg-background pl-9 pr-4 text-sm outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-9 rounded-md border border-input bg-background pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
         </div>
@@ -205,12 +212,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
+                  ? 'bg-accent text-accent-foreground font-semibold border-l-2 border-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
               >
-                <Icon className="size-4" />
+                <Icon className={`size-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                 {item.label}
               </Link>
             )
@@ -221,7 +228,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="p-4 border-t border-border">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center justify-between rounded-md p-2 hover:bg-accent transition-colors text-left cursor-pointer"
+            className="flex w-full items-center justify-between rounded-lg p-2 hover:bg-muted transition-colors text-left cursor-pointer"
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="size-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
@@ -244,15 +251,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
         {/* Top Header */}
         <header className="h-14 border-b border-border bg-card flex items-center justify-between px-6 shrink-0 z-10 sticky top-0">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Admin Console</span>
+            <span className="font-medium text-foreground">Automark Admin Portal</span>
             <span>/</span>
-            <span className="text-foreground font-medium capitalize">
+            <span className="text-primary font-medium capitalize">
               {pathname.split('/').pop() || 'Dashboard'}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
               {currentUser.dept || 'CSE'} Department
             </span>
           </div>
@@ -274,22 +281,21 @@ export function AdminContent({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-// Re-export constants for compatibility with existing files temporarily if they need it,
-// though we aim to remove them all.
+// Re-export constants with clean royal blue & dark slate tokens
 export const C = {
-  navy: '#09090B',
-  blue: '#18181B',
-  blueLight: '#F4F4F5',
-  blueFaint: '#FAFAFA',
+  navy: '#0B192C',
+  blue: '#0D59D6',
+  blueLight: '#EFF6FF',
+  blueFaint: '#F8FAFC',
   green: '#16A34A',
   greenLight: '#DCFCE7',
   red: '#DC2626',
   redLight: '#FEE2E2',
   orange: '#EA580C',
   orangeLight: '#FFEDD5',
-  purple: '#9333EA',
+  purple: '#7C3AED',
   purpleLight: '#F3E8FF',
-  textSecondary: '#71717A',
-  border: '#E4E4E7',
+  textSecondary: '#64748B',
+  border: '#E2E8F0',
   white: '#FFFFFF'
 }
